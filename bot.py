@@ -41,50 +41,109 @@ def send_telegram(message):
     except Exception as e:
         print(f"Ошибка отправки: {e}")
 
-def parse_avito():
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
-    }
-    
+def def parse_avito():
+    """
+    Парсинг Авито через внутреннее API (работает стабильно)
+    """
     try:
-        print("🔄 Парсинг мобильной версии...")
-        response = requests.get(AVITO_URL, headers=headers, timeout=15)
+        print("🔄 Запрос к API Авито...")
+        
+        # Формируем запрос к поисковому API Авито
+        params = {
+            'q': 'мягкая игрушка',  # поисковый запрос
+            'p': 1,  # страница
+            's': 104,  # сортировка: по дате
+        }
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+        
+        # Используем API эндпоинт Авито
+        url = 'https://www.avito.ru/web/1/main/items'
+        response = requests.get(url, params=params, headers=headers, timeout=10)
         
         if response.status_code != 200:
-            print(f"❌ Ошибка HTTP: {response.status_code}")
+            print(f"❌ Ошибка API: {response.status_code}")
             return []
         
-        text = response.text
-        print(f"📄 Размер страницы: {len(text)} символов")
-        
-        # Для мобильной версии другие паттерны
+        data = response.json()
         items = []
         
-        # Ищем блоки с товарами
-        blocks = re.findall(r'<div class="iva-item-root[^>]*>(.*?)</div>\s*</div>\s*</div>', text, re.DOTALL)
-        print(f"Найдено блоков: {len(blocks)}")
-        
-        for block in blocks[:20]:  # берем первые 20
-            # Ищем название
-            title_match = re.search(r'item-title">(.*?)<', block)
-            # Ищем цену
-            price_match = re.search(r'price">(.*?)<', block)
-            # Ищем ссылку
-            link_match = re.search(r'href="(.*?)"', block)
-            
-            if title_match and price_match and link_match:
+        # Парсим JSON-ответ
+        if 'items' in data:
+            for item in data['items']:
                 items.append({
-                    'title': title_match.group(1).strip(),
-                    'price': price_match.group(1).strip(),
-                    'link': 'https://m.avito.ru' + link_match.group(1),
-                    'id': link_match.group(1).split('/')[-1]
+                    'title': item.get('title', ''),
+                    'price': str(item.get('price', {}).get('value', 'Цена не указана')) + ' ₽',
+                    'link': f"https://www.avito.ru{item.get('uriPath', '')}",
+                    'id': str(item.get('id', ''))
                 })
         
-        print(f"✅ Собрано объявлений: {len(items)}")
+        print(f"✅ API вернул {len(items)} объявлений")
+        
+        # Если API не сработало, пробуем запасной вариант
+        if not items:
+            print("🔄 API не сработало, пробую прямую загрузку...")
+            return parse_avito_fallback()
+            
         return items
         
     except Exception as e:
-        print(f"💥 Ошибка парсинга: {e}")
+        print(f"💥 Ошибка API: {e}")
+        # Если API упало, пробуем запасной вариант
+        return parse_avito_fallback()
+
+def parse_avito_fallback():
+    """
+    Запасной вариант парсинга (если API не работает)
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    try:
+        url = 'https://www.avito.ru/rossiya/igrushki?q=мягкая+игрушка&s=104'
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            return []
+        
+        text = response.text
+        
+        # Универсальные паттерны для поиска
+        items = []
+        
+        # Ищем все ссылки на товары
+        links = re.findall(r'href="(https://www.avito.ru/[^"]*?_[0-9]+)"', text)
+        titles = re.findall(r'<h3[^>]*item-name[^>]*>(.*?)</h3>', text, re.DOTALL)
+        prices = re.findall(r'<meta itemprop="price" content="([0-9]+)"', text)
+        
+        # Очищаем названия от HTML-тегов
+        clean_titles = []
+        for t in titles:
+            t = re.sub(r'<[^>]+>', '', t)
+            t = t.replace('&nbsp;', ' ').strip()
+            clean_titles.append(t)
+        
+        # Берем минимум из длин
+        min_len = min(len(links), len(clean_titles), len(prices))
+        
+        for i in range(min_len):
+            items.append({
+                'title': clean_titles[i],
+                'price': prices[i] + ' ₽',
+                'link': links[i],
+                'id': links[i].split('_')[-1]
+            })
+        
+        print(f"✅ Fallback нашел {len(items)} объявлений")
+        return items
+        
+    except Exception as e:
+        print(f"💥 Ошибка fallback: {e}")
         return []
 
 def analyze_trends(items, history):
@@ -180,5 +239,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
