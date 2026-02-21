@@ -11,7 +11,7 @@ try:
     print(f"Токен получен: {token[:5]}..." if token != "не найден" else "Токен не найден")
     
     # Отправляем тестовое сообщение
-    chat_id = "ТВОЙ_CHAT_ID"  # ВРЕМЕННО вставь сюда свой ID
+    chat_id = "5401786063"  # ВРЕМЕННО вставь сюда свой ID
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = {"chat_id": chat_id, "text": "✅ Тест: бот работает!"}
     r = requests.post(url, data=data)
@@ -23,4 +23,5 @@ except Exception as e:
 print("⏳ Ожидаю 30 секунд...")
 time.sleep(30)
 print("✅ Тест завершен")
+
 
