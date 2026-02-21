@@ -124,21 +124,37 @@ def generate_report(today_trends, new_items):
     return report
 
 def check_trends():
-    print(f"▶️ [{datetime.now()}] Проверка трендов")
-    history = load_history()
-    items = parse_avito()
-    
-    if items:
-        today_trends, new_items = analyze_trends(items, history)
-        report = generate_report(today_trends, new_items)
-        if report:
-            send_telegram(report)
-            save_history(history)
-            print(f"✅ Отчет отправлен, новых: {len(new_items)}")
+    try:
+        print(f"▶️ [{datetime.now()}] Проверка трендов")
+        send_telegram("⏳ Начинаю проверку Авито...")  # ← диагностика
+        
+        history = load_history()
+        items = parse_avito()
+        
+        if items is None:
+            send_telegram("❌ Ошибка: парсинг вернул None")
+            return
+            
+        send_telegram(f"📦 Получено объявлений: {len(items)}")  # ← диагностика
+        
+        if items:
+            today_trends, new_items = analyze_trends(items, history)
+            send_telegram(f"🆕 Новых объявлений: {len(new_items)}")  # ← диагностика
+            
+            report = generate_report(today_trends, new_items)
+            if report:
+                send_telegram(report)
+                save_history(history)
+                send_telegram("✅ Отчет отправлен")  # ← диагностика
+            else:
+                send_telegram("📭 Новых объявлений нет")
         else:
-            print("📭 Новых объявлений нет")
-    else:
-        print("❌ Не удалось получить объявления")
+            send_telegram("❌ Не удалось получить объявления (пустой список)")
+            
+    except Exception as e:
+        error_msg = f"💥 КРИТИЧЕСКАЯ ОШИБКА: {str(e)}"
+        print(error_msg)
+        send_telegram(error_msg)
 
 def main():
     print("🚀 Тренд-агент ЗАПУЩЕН")
@@ -154,3 +170,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
