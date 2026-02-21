@@ -8,7 +8,7 @@ from collections import Counter
 
 # ========== НАСТРОЙКИ ==========
 # ВАЖНО: Токен и Chat ID берутся из переменных окружения на Bothost!
-TELEGRAM_TOKEN = os.environ.get("BOT_TOKEN")
+TELEGRAM_TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
 # Твоя ссылка на поиск Авито (это безопасно, ее можно оставить)
@@ -175,4 +175,5 @@ def main():
         check_trends()
 
 if __name__ == "__main__":
+
     main()
