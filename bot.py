@@ -9,7 +9,7 @@ from collections import Counter
 # ========== НАСТРОЙКИ ==========
 TELEGRAM_TOKEN = os.environ.get("TOKEN") or os.environ.get("BOT")
 CHAT_ID = int(os.environ.get("CHAT_ID"))
-AVITO_URL = "https://www.avito.ru/rossiya/igrushki?q=мягкая+игрушка&s=104"
+AVITO_URL = "https://m.avito.ru/rossiya/igrushki?q=мягкая+игрушка&s=104"
 
 # Ключевые слова для отслеживания трендов
 TREND_KEYWORDS = [
@@ -43,11 +43,11 @@ def send_telegram(message):
 
 def parse_avito():
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
     }
     
     try:
-        print("🔄 Начинаю парсинг Авито...")
+        print("🔄 Парсинг мобильной версии...")
         response = requests.get(AVITO_URL, headers=headers, timeout=15)
         
         if response.status_code != 200:
@@ -55,20 +55,30 @@ def parse_avito():
             return []
         
         text = response.text
-        titles = re.findall(r'item-name">(.*?)<', text)
-        prices = re.findall(r'price">(.*?)<', text)
-        links = re.findall(r'href="(https://www.avito.ru/[^"]+)"', text)
+        print(f"📄 Размер страницы: {len(text)} символов")
         
+        # Для мобильной версии другие паттерны
         items = []
-        min_len = min(len(titles), len(prices), len(links))
         
-        for i in range(min_len):
-            items.append({
-                'title': titles[i].strip(),
-                'price': prices[i].strip(),
-                'link': links[i],
-                'id': links[i].split('_')[-1] if '_' in links[i] else str(i)
-            })
+        # Ищем блоки с товарами
+        blocks = re.findall(r'<div class="iva-item-root[^>]*>(.*?)</div>\s*</div>\s*</div>', text, re.DOTALL)
+        print(f"Найдено блоков: {len(blocks)}")
+        
+        for block in blocks[:20]:  # берем первые 20
+            # Ищем название
+            title_match = re.search(r'item-title">(.*?)<', block)
+            # Ищем цену
+            price_match = re.search(r'price">(.*?)<', block)
+            # Ищем ссылку
+            link_match = re.search(r'href="(.*?)"', block)
+            
+            if title_match and price_match and link_match:
+                items.append({
+                    'title': title_match.group(1).strip(),
+                    'price': price_match.group(1).strip(),
+                    'link': 'https://m.avito.ru' + link_match.group(1),
+                    'id': link_match.group(1).split('/')[-1]
+                })
         
         print(f"✅ Собрано объявлений: {len(items)}")
         return items
@@ -170,4 +180,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
