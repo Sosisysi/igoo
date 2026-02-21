@@ -16,7 +16,7 @@ def send_telegram_diagnostic(msg):
 # ========== НАСТРОЙКИ ==========
 TELEGRAM_TOKEN = os.environ.get("TOKEN") or os.environ.get("BOT")
 CHAT_ID = int(os.environ.get("CHAT_ID"))
-AVITO_URL = "https://www.avito.ru/rossiya/myagkie_igrushki?q=мягкая+игрушка&s=104"
+AVITO_URL = "https://www.avito.ru/all/tovary_dlya_detey_i_igrushki?q=%D0%BC%D1%8F%D0%B3%D0%BA%D0%B8%D0%B5+%D0%B8%D0%B3%D1%80%D1%83%D1%88%D0%BA%D0%B8"
 
 # Ключевые слова для отслеживания трендов
 TREND_KEYWORDS = [
@@ -104,6 +104,15 @@ def parse_avito():
         return parse_avito_fallback()
 
 def parse_avito_fallback():
+     search_url = "https://www.avito.ru/all/tovary_dlya_detey_i_igrushki?q=%D0%BC%D1%8F%D0%B3%D0%BA%D0%B8%D0%B5+%D0%B8%D0%B3%D1%80%D1%83%D1%88%D0%BA%D0%B8"  # ← вставь СВОЮ ссылку
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    try:
+        print(f"🔍 Парсинг категории: {search_url}")
+        response = requests.get(search_url, headers=headers, timeout=10)
     """
     Запасной вариант парсинга с правильным сбором ссылок
     """
@@ -267,10 +276,27 @@ def generate_report(today_trends, new_items):
         report += "\n"
     
     report += "🆕 <b>Самые свежие:</b>\n"
-    for item in new_items[:3]:
+    count = 0
+    for item in new_items:
+        if count >= 5:  # показываем только 5
+            break
+            
+        # Проверяем, что это действительно игрушка по ссылке
+        if '/myagkie_igrushki/' not in item['link'] and '/igrushki/' not in item['link']:
+            print(f"Пропущена ссылка не на игрушки: {item['link']}")
+            continue
+            
         short_title = item['title'][:50] + "..." if len(item['title']) > 50 else item['title']
         report += f"• {short_title} — {item['price']}\n"
-        report += f"  {item['link']}\n"
+        
+        if item['link'] and item['link'] != "https://www.avito.ru":
+            report += f"  {item['link']}\n"
+        else:
+            report += f"  (ссылка временно недоступна)\n"
+        count += 1
+    
+    if count == 0:
+        report += "• Нет ссылок на мягкие игрушки в выдаче\n"
     
     return report
 
@@ -327,6 +353,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
