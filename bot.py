@@ -16,7 +16,7 @@ def send_telegram_diagnostic(msg):
 # ========== НАСТРОЙКИ ==========
 TELEGRAM_TOKEN = os.environ.get("TOKEN") or os.environ.get("BOT")
 CHAT_ID = int(os.environ.get("CHAT_ID"))
-AVITO_URL = "https://m.avito.ru/rossiya/igrushki?q=мягкая+игрушка&s=104"
+AVITO_URL = "https://www.avito.ru/rossiya/myagkie_igrushki?q=мягкая+игрушка&s=104"
 
 # Ключевые слова для отслеживания трендов
 TREND_KEYWORDS = [
@@ -198,26 +198,35 @@ def parse_avito_fallback():
                 })
         
         # Фильтруем только те объявления, где в названии есть что-то похожее на игрушку
-        filtered_items = []
-        toy_keywords = ['мягк', 'игрушк', 'кукум', 'лабуб', 'чебураш', 'плюш', 'мишк', 'зайк', 'лошадк', 'пегас', 'дракон', 'единорог']
-        
-        for item in items:
-            title_lower = item['title'].lower()
-            if any(keyword in title_lower for keyword in toy_keywords):
-                filtered_items.append(item)
-            else:
-                print(f"Отсеяно (не игрушка): {item['title'][:30]}...")
-        
-        print(f"✅ После фильтрации осталось: {len(filtered_items)} игрушек")
-        
-        # Отправляем диагностику
-        send_telegram(f"📊 Статистика: всего найдено {len(items)} объявлений, из них игрушек {len(filtered_items)}")
-        
-        return filtered_items
-        
-    except Exception as e:
-        print(f"💥 Ошибка fallback: {e}")
-        return []
+       # Жесткая фильтрация ТОЛЬКО мягких игрушек
+filtered_items = []
+toy_keywords = [
+    'мягк', 'игрушк', 'плюш', 'мишк', 'зайк', 'лошадк', 'пегас', 
+    'дракон', 'единорог', 'слон', 'жираф', 'собак', 'кот', 'кошк',
+    'кукум', 'лабуб', 'labubu', 'чебураш', 'антистресс', 'сквиш',
+    'тянучк', 'брелок'
+]
+
+# Стоп-слова (то, что НЕ должно быть в названии)
+stop_words = [
+    'чехол', 'запчаст', 'авто', 'шина', 'колесо', 'телефон', 
+    'прицеп', 'полуприцеп', 'samsung', 'iphone', 'xiaomi',
+    'запчасти', 'автомобил', 'масло', 'аккумулятор'
+]
+
+for item in items:
+    title_lower = item['title'].lower()
+    
+    # Проверяем, что это игрушка
+    is_toy = any(keyword in title_lower for keyword in toy_keywords)
+    
+    # Проверяем, что это НЕ запчасть/телефон/авто
+    is_not_junk = not any(stop in title_lower for stop in stop_words)
+    
+    if is_toy and is_not_junk:
+        filtered_items.append(item)
+    else:
+        print(f"Отсеяно: {item['title'][:50]}...")
 
 def analyze_trends(items, history):
     today_trends = Counter()
@@ -283,11 +292,17 @@ def check_trends():
             today_trends, new_items = analyze_trends(items, history)
             send_telegram(f"🆕 Новых объявлений: {len(new_items)}")  # ← диагностика
             
-            report = generate_report(today_trends, new_items)
-            if report:
-                send_telegram(report)
-                save_history(history)
-                send_telegram("✅ Отчет отправлен")  # ← диагностика
+           report += f"🆕 <b>Самые свежие:</b>\n"
+for item in new_items[:5]:  # показываем 5 свежих
+    short_title = item['title'][:50] + "..." if len(item['title']) > 50 else item['title']
+    report += f"• {short_title} — {item['price']}\n"
+    
+    # Проверяем, что ссылка не пустая и не просто "https://www.avito.ru"
+    if item['link'] and item['link'] != "https://www.avito.ru":
+        report += f"  {item['link']}\n"
+    else:
+        # Если ссылки нет, добавляем предупреждение
+        report += f"  (ссылка временно недоступна)\n"
             else:
                 send_telegram("📭 Новых объявлений нет")
         else:
@@ -312,6 +327,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
