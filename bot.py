@@ -41,7 +41,7 @@ def send_telegram(message):
     except Exception as e:
         print(f"Ошибка отправки: {e}")
 
-def def parse_avito():
+def parse_avito():
     """
     Парсинг Авито через внутреннее API (работает стабильно)
     """
@@ -239,6 +239,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
