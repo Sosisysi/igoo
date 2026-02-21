@@ -5,7 +5,14 @@ from datetime import datetime
 import json
 import os
 from collections import Counter
-
+def send_telegram_diagnostic(msg):
+    """Отправка диагностических сообщений (дубль основной функции)"""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        data = {"chat_id": CHAT_ID, "text": f"🔧 {msg}"}
+        requests.post(url, data=data)
+    except:
+        pass
 # ========== НАСТРОЙКИ ==========
 TELEGRAM_TOKEN = os.environ.get("TOKEN") or os.environ.get("BOT")
 CHAT_ID = int(os.environ.get("CHAT_ID"))
@@ -98,7 +105,7 @@ def parse_avito():
 
 def parse_avito_fallback():
     """
-    Запасной вариант парсинга (если API не работает)
+    Запасной вариант парсинга с правильным сбором ссылок
     """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -106,41 +113,107 @@ def parse_avito_fallback():
     
     try:
         url = 'https://www.avito.ru/rossiya/igrushki?q=мягкая+игрушка&s=104'
+        print(f"🔍 Запасной парсинг: {url}")
+        
         response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code != 200:
+            print(f"❌ Ошибка запасного парсинга: {response.status_code}")
             return []
         
         text = response.text
-        
-        # Универсальные паттерны для поиска
         items = []
         
-        # Ищем все ссылки на товары
-        links = re.findall(r'href="(https://www.avito.ru/[^"]*?_[0-9]+)"', text)
-        titles = re.findall(r'<h3[^>]*item-name[^>]*>(.*?)</h3>', text, re.DOTALL)
-        prices = re.findall(r'<meta itemprop="price" content="([0-9]+)"', text)
+        # Ищем ВСЕ ссылки на товары (паттерн для Авито)
+        # Ссылки на товары выглядят так: /moskva/igrushki/myagkaya_igrushka_123456789
+        link_matches = re.findall(r'href="(/[^"]*?igrushki[^"]*?_[0-9]+)"', text)
         
-        # Очищаем названия от HTML-тегов
-        clean_titles = []
-        for t in titles:
-            t = re.sub(r'<[^>]+>', '', t)
-            t = t.replace('&nbsp;', ' ').strip()
-            clean_titles.append(t)
+        # Ищем заголовки товаров
+        title_matches = re.findall(r'<h3[^>]*item-name[^>]*>(.*?)</h3>', text, re.DOTALL)
+        
+        # Ищем цены (цифры с символом ₽)
+        price_matches = re.findall(r'<strong[^>]*>[^>]*>([0-9\s]+)\s*₽', text)
+        
+        print(f"Найдено ссылок: {len(link_matches)}")
+        print(f"Найдено заголовков: {len(title_matches)}")
+        print(f"Найдено цен: {len(price_matches)}")
         
         # Берем минимум из длин
-        min_len = min(len(links), len(clean_titles), len(prices))
+        min_len = min(len(link_matches), len(title_matches), len(price_matches))
         
         for i in range(min_len):
+            # Очищаем заголовок от HTML-тегов
+            title = title_matches[i]
+            title = re.sub(r'<[^>]+>', '', title)
+            title = title.replace('&nbsp;', ' ').strip()
+            
+            # Очищаем цену от пробелов
+            price = price_matches[i].replace(' ', '') + ' ₽'
+            
+            # Формируем полную ссылку
+            link = link_matches[i]
+            if not link.startswith('http'):
+                link = 'https://www.avito.ru' + link
+            
+            # Извлекаем ID из ссылки
+            item_id = link.split('_')[-1] if '_' in link else str(i)
+            
             items.append({
-                'title': clean_titles[i],
-                'price': prices[i] + ' ₽',
-                'link': links[i],
-                'id': links[i].split('_')[-1]
+                'title': title,
+                'price': price,
+                'link': link,
+                'id': item_id
             })
         
-        print(f"✅ Fallback нашел {len(items)} объявлений")
-        return items
+        # Если не сработало с паттернами выше, пробуем другой подход
+        if not items:
+            print("🔄 Пробуем альтернативный метод парсинга...")
+            
+            # Ищем все ссылки, которые выглядят как товары
+            all_links = re.findall(r'href="(https://www.avito.ru/[^"]*?_[0-9]+)"', text)
+            
+            # Ищем все заголовки в тегах h3
+            all_titles = re.findall(r'<h3[^>]*>(.*?)</h3>', text, re.DOTALL)
+            
+            # Ищем все цены
+            all_prices = re.findall(r'([0-9\s]+)\s*₽', text)
+            
+            print(f"Альтернатива - ссылок: {len(all_links)}, заголовков: {len(all_titles)}, цен: {len(all_prices)}")
+            
+            min_len2 = min(len(all_links), len(all_titles), len(all_prices))
+            
+            for i in range(min_len2):
+                title = all_titles[i]
+                title = re.sub(r'<[^>]+>', '', title).strip()
+                
+                price = all_prices[i].replace(' ', '') + ' ₽'
+                link = all_links[i]
+                item_id = link.split('_')[-1]
+                
+                items.append({
+                    'title': title,
+                    'price': price,
+                    'link': link,
+                    'id': item_id
+                })
+        
+        # Фильтруем только те объявления, где в названии есть что-то похожее на игрушку
+        filtered_items = []
+        toy_keywords = ['мягк', 'игрушк', 'кукум', 'лабуб', 'чебураш', 'плюш', 'мишк', 'зайк', 'лошадк', 'пегас', 'дракон', 'единорог']
+        
+        for item in items:
+            title_lower = item['title'].lower()
+            if any(keyword in title_lower for keyword in toy_keywords):
+                filtered_items.append(item)
+            else:
+                print(f"Отсеяно (не игрушка): {item['title'][:30]}...")
+        
+        print(f"✅ После фильтрации осталось: {len(filtered_items)} игрушек")
+        
+        # Отправляем диагностику
+        send_telegram(f"📊 Статистика: всего найдено {len(items)} объявлений, из них игрушек {len(filtered_items)}")
+        
+        return filtered_items
         
     except Exception as e:
         print(f"💥 Ошибка fallback: {e}")
@@ -239,6 +312,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
