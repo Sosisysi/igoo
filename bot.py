@@ -1,3 +1,4 @@
+
 import requests
 import time
 import re
@@ -7,6 +8,8 @@ import os
 from collections import Counter
 
 # ========== НАСТРОЙКИ ==========
+def check_trends():
+    print(f"▶️ [{datetime.now()}] Запуск проверки трендов")
 # ВАЖНО: Токен и Chat ID берутся из переменных окружения на Bothost!
 TELEGRAM_TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -61,20 +64,36 @@ def parse_avito():
     }
     
     try:
-        response = requests.get(AVITO_URL, headers=headers, timeout=10)
+        print("🔄 Начинаю парсинг Авито...")
+        response = requests.get(AVITO_URL, headers=headers, timeout=15)
+        print(f"📡 Статус ответа: {response.status_code}")
+        
         if response.status_code != 200:
-            print(f"Ошибка HTTP: {response.status_code}")
+            print(f"❌ Ошибка HTTP: {response.status_code}")
             return []
+        
+        print(f"📄 Размер страницы: {len(response.text)} символов")
+        
+        # Сохраняем первые 500 символов для проверки
+        print(f"📝 Начало страницы: {response.text[:500]}")
         
         text = response.text
         
         # Простой поиск объявлений
-        items = []
         titles = re.findall(r'item-name">(.*?)<', text)
         prices = re.findall(r'price">(.*?)<', text)
         links = re.findall(r'href="(https://www.avito.ru/[^"]+)"', text)
         
+        print(f"🔍 Найдено заголовков: {len(titles)}")
+        print(f"🔍 Найдено цен: {len(prices)}")
+        print(f"🔍 Найдено ссылок: {len(links)}")
+        
+        if titles:
+            print(f"Пример первого заголовка: {titles[0]}")
+        
+        items = []
         min_len = min(len(titles), len(prices), len(links))
+        
         for i in range(min_len):
             items.append({
                 'title': titles[i].strip(),
@@ -83,10 +102,13 @@ def parse_avito():
                 'id': links[i].split('_')[-1] if '_' in links[i] else str(i)
             })
         
-        print(f"Найдено объявлений: {len(items)}")
+        print(f"✅ Собрано объявлений: {len(items)}")
         return items
+        
     except Exception as e:
-        print(f"Ошибка парсинга: {e}")
+        print(f"💥 КРИТИЧЕСКАЯ ОШИБКА ПАРСИНГА: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 # Анализ трендов
@@ -177,3 +199,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
